@@ -1,15 +1,98 @@
-version: "1.0.0"
 services:
+  mongodb:
+    container_name: mongodb
+    image: mongo:latest
+    restart: always
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+
+    # volumes:
+    #   - ./mongodata:/data/db
+    
+    ports:
+      - 27017:27017
+    networks:
+      - emqxnet
   
   emqx:
     container_name: emqx
-    image: emqx:emqx:latest
-    restart: container_name
+    image: emqx:latest
+    restart: always
     ports:
       - ${EMQX_DASHBOARD_PORT}:18083
       - 8083:8083
+
+    depends_on:
+      - mongodb
+    networks:
+      - emqxnet
+
     environment:
+
+      #General
       EQMX_NAME: KenFoxFire-IoT
+      EQMX_HOST: 127.0.0.1
       EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD}
       EMQX_DASHBOARD__DEFAULT_USERNAME: ${EMQX_DASHBOARD_USER}
+
+
       EMQX_LISTENER__TCP__EXTERNAL___MAX_CONNECTIONS: 1000
+      # \opt\emqx\data\configs\cluster.hocon
+
+      # Configuración de autenticación - backend 1 MongoDB
+      EMQX_AUTHENTICATION__1__BACKEND: mongodb
+      EMQX_AUTHENTICATION__1__COLLECTION: ${MONGO_AUTHCOLLECTION}
+      EMQX_AUTHENTICATION__1__DATABASE: ${MONGO_IOTDB}
+      EMQX_AUTHENTICATION__1__ENABLE: "true"
+      EMQX_AUTHENTICATION__1__FILTER: '{"username":"$${username}"}'
+      EMQX_AUTHENTICATION__1__IS_SUPERUSER_FIELD: is_superuser
+      EMQX_AUTHENTICATION__1__MECHANISM: password_based
+      EMQX_AUTHENTICATION__1__MONGO_TYPE: single
+      EMQX_AUTHENTICATION__1__PASSWORD: ${MONGO_PASSWORD}
+      EMQX_AUTHENTICATION__1__USERNAME: ${MONGO_USER}
+      EMQX_AUTHENTICATION__1__PASSWORD_HASH_ALGORITHM__NAME: bcrypt
+      EMQX_AUTHENTICATION__1__PASSWORD_HASH_FIELD: password_hash
+      EMQX_AUTHENTICATION__1__POOL_SIZE: 4
+      EMQX_AUTHENTICATION__1__SERVER: "mongodb:27017"
+      EMQX_AUTHENTICATION__1__SRV_RECORD: "false"
+
+      # SSL settings
+      # EMQX_AUTHENTICATION__1__SSL__CIPHERS: ""
+      # EMQX_AUTHENTICATION__1__SSL__DEPTH: 10
+      # EMQX_AUTHENTICATION__1__SSL__ENABLE: "false"
+      # EMQX_AUTHENTICATION__1__SSL__HIBERNATE_AFTER: 5s
+      # EMQX_AUTHENTICATION__1__SSL__LOG_LEVEL: notice
+      # EMQX_AUTHENTICATION__1__SSL__REUSE_SESSIONS: "true"
+      # EMQX_AUTHENTICATION__1__SSL__SECURE_RENEGOTIATE: "true"
+      # EMQX_AUTHENTICATION__1__SSL__VERIFY: verify_peer
+      # EMQX_AUTHENTICATION__1__SSL__VERSIONS__0: tlsv1.3
+      # EMQX_AUTHENTICATION__1__SSL__VERSIONS__1: tlsv1.2
+
+      # Rules Authorization
+      EMQX_ALLOW_ANONYMOUS: "false"
+      EMQX_AUTHORIZATION__SOURCES: '[{"type": "mongodb","mongo_type": "single","server": "mongodb:27017","database": "${MONGO_IOTDB}","collection": "${MONGO_RULESCOLLECTION}","username": "${MONGO_USER}","password": "${MONGO_PASSWORD}","filter": {"username": "$${username}"},"pool_size": 4,"srv_record": false,"ssl": {"enable": false,
+        "verify": "verify_peer"},"topology": {"connect_timeout_ms": "20s"},"use_legacy_protocol": "auto"}]'
+      EMQX_AUTHORIZATION__1__W_MODE: unsafe
+
+      EMQX_AUTHORIZATION__CACHE__ENABLE: "true"
+      EMQX_AUTHORIZATION__CACHE__MAX_SIZE: 32
+      EMQX_AUTHORIZATION__CACHE__TTL: "1m"
+
+      EMQX_AUTHORIZATION__NO_MATCH: deny
+      EMQX_AUTHORIZATION__DENY_ACTION: ignore
+
+
+    # volumes:
+    #   - vol-emqx-data:/opt/emqx/data
+    #   - vol-emqx-etc:/opt/emqx/etc
+    #   - vol-emqx-log:/opt/emqx/log
+
+# volumes:
+#   vol-emqx-data:
+#   vol-emqx-etc:
+#   vol-emqx-log:
+
+networks:
+  emqxnet:
+    driver: bridge
